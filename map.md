@@ -216,7 +216,9 @@ sibling (`_GGUF_SOURCE`) for the same weights.
 | [code_addon.dart](app/lib/addons/code/code_addon.dart) | The tab (desktop only; Android gets a hard "not available" pane). |
 | [code_agent_controller.dart](app/lib/addons/code/code_agent_controller.dart) | Drives one turn: `ensureRunning()`, create/continue an opencode session, stream events, transcript entries, tool-approval routing. |
 | [code_agent_pane.dart](app/lib/addons/code/code_agent_pane.dart) | The tab UI — transcript, collapsible tool-call rows (icon per opencode tool), approval dialog. |
-| [code_engine.dart](app/lib/addons/code/code_engine.dart) | `CodeEngine` interface + `LocalCodeEngine` — composes the two supervisors behind one `ensureRunning({model})`. Abstract for testability. |
+| [code_engine.dart](app/lib/addons/code/code_engine.dart) | `CodeEngine` interface + `LocalCodeEngine` — composes the two supervisors behind one `ensureRunning({model})`, and exposes `isInstalled()` / `install()` for the Install card. Abstract for testability. |
+| [code_engine_installer.dart](app/lib/addons/code/code_engine_installer.dart) | One-click install of `llama-server` + `opencode` (Windows x64): pinned releases, SHA-256 verified, unpacked into the app data folder. `CodeEngineTool`, the pins, and where they live. |
+| [code_engine_locator.dart](app/lib/addons/code/code_engine_locator.dart) | Finds those two programs: the app's own install, then `PATH`, then WinGet / npm / `~/.opencode` locations that never reach `PATH`. |
 | [llama_server_supervisor.dart](app/lib/addons/code/llama_server_supervisor.dart) | Owns the `llama-server` child process (port **8100**) serving the selected GGUF model over an OpenAI-compatible API with `--jinja`. Restarts only when the model changes. |
 | [opencode_process_supervisor.dart](app/lib/addons/code/opencode_process_supervisor.dart) | Owns the single `opencode serve` process (port **8101**), started once lazily and kept for the app's life; hosts all project dirs via a `directory` query param. Writes opencode's config pointing at llama-server, plus a second provider for the Python backend's server models (restarts if asked for one it didn't register). |
 | [opencode_client.dart](app/lib/addons/code/opencode_client.dart) | HTTP/SSE client for opencode — `POST /session`, `/session/:id/prompt_async`, the shared `/event` stream, `/permission/:id/reply`. `OpencodeEvent.tryParse` narrows the 80+ event types to the few acted on. |
@@ -276,6 +278,10 @@ sibling (`_GGUF_SOURCE`) for the same weights.
 | [opencode_client_test.dart](app/test/opencode_client_test.dart) | opencode HTTP/SSE client + event parsing. |
 | [code_model_warning_test.dart](app/test/code_model_warning_test.dart) | The Code tab picker's warning dialog: silent for working/uncertain/unknown models, confirm-or-cancel for an incompatible one, not repeated after "Use anyway". |
 | [code_tool_support_test.dart](app/test/code_tool_support_test.dart) | The Code-tab verdict table: every model file has an entry, ids resolve across `_on_device` siblings, and the detail page renders the verdict. |
+| [code_engine_installer_test.dart](app/test/code_engine_installer_test.dart) | The installer against a fake HTTP client: checksum mismatch, HTTP errors, missing exe, antivirus-deleted exe, already-installed. |
+| [code_engine_locator_test.dart](app/test/code_engine_locator_test.dart) | Lookup order and the WinGet / npm / `~/.opencode` locations. |
+| [code_engine_card_test.dart](app/test/code_engine_card_test.dart) | The controller's engine-ready / install flow and the pane's Install card. |
+| [real_code_run_test.dart](app/test/real_code_run_test.dart) | Skipped by default. A real `llama-server` + `opencode` run of the Code tab; `MULTI_AI_REAL_INSTALL=1` also does a real install from GitHub. |
 | [code_engine_test.dart](app/test/code_engine_test.dart) | `LocalCodeEngine`'s on-device vs. server-model routing (provider/model ids, llama-server skipped, backend errors). |
 | [model_pool_download_test.dart](app/test/model_pool_download_test.dart) | Roster / download / cache logic. |
 | [orchestration_controller_test.dart](app/test/orchestration_controller_test.dart) | Council deliberation modes. |

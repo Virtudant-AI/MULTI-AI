@@ -5,6 +5,8 @@ import 'package:llamadart/llamadart.dart';
 
 import '../../api_client.dart' show ModelInfo, apiBaseUrl;
 import '../../model_pool.dart';
+import 'code_engine_installer.dart';
+import 'code_engine_locator.dart';
 import 'llama_server_supervisor.dart';
 import 'opencode_client.dart';
 import 'opencode_process_supervisor.dart';
@@ -33,6 +35,20 @@ abstract class CodeEngine {
   /// backend, or if the backend can't be reached for a server-side model.
   Future<void> ensureRunning({required ModelInfo model});
 
+  /// Whether the two external programs (`llama-server`, `opencode`) are
+  /// available — installed by this app, or already on the machine.
+  Future<bool> isInstalled();
+
+  /// Whether this platform can install them for the user. When false the user
+  /// installs them by hand (see the README's "Code tab" section).
+  bool get canInstall;
+
+  /// Downloads and installs the missing programs, reporting progress.
+  Stream<CodeEngineProgress> install();
+
+  /// The approximate download size of [install], for the button that starts it.
+  int get installBytes;
+
   Future<void> stop();
 }
 
@@ -48,13 +64,22 @@ class LocalCodeEngine implements CodeEngine {
     OpencodeProcessSupervisor? opencode,
     OpencodeClient? client,
     Future<Set<String>> Function()? fetchServerModelIds,
-  })  : _llamaServer = llamaServer ?? LlamaServerSupervisor(),
-        _opencode = opencode ?? OpencodeProcessSupervisor(),
+    CodeEngineInstaller? installer,
+    CodeEngineLocator? locator,
+  })  : _installer = installer ?? CodeEngineInstaller(),
         _fetchServerModelIds = fetchServerModelIds ?? _fetchBackendModelIds,
-        client = client ?? HttpOpencodeClient(baseUrl: OpencodeProcessSupervisor.baseUrl);
+        client = client ?? HttpOpencodeClient(baseUrl: OpencodeProcessSupervisor.baseUrl) {
+    // One locator shared by the engine and both supervisors, so "is it
+    // installed?" and "where do I launch it from?" can never disagree.
+    _locator = locator ?? CodeEngineLocator(installer: _installer);
+    _llamaServer = llamaServer ?? LlamaServerSupervisor(locator: _locator);
+    _opencode = opencode ?? OpencodeProcessSupervisor(locator: _locator);
+  }
 
-  final LlamaServerSupervisor _llamaServer;
-  final OpencodeProcessSupervisor _opencode;
+  final CodeEngineInstaller _installer;
+  late final CodeEngineLocator _locator;
+  late final LlamaServerSupervisor _llamaServer;
+  late final OpencodeProcessSupervisor _opencode;
   final Future<Set<String>> Function() _fetchServerModelIds;
 
   @override
@@ -131,6 +156,20 @@ class LocalCodeEngine implements CodeEngine {
     final entry = await manager.ensureModel(ModelSource.parse(hfSource));
     return entry.filePath;
   }
+
+  @override
+  Future<bool> isInstalled() async =>
+      await _locator.find(CodeEngineTool.llamaServer) != null &&
+      await _locator.find(CodeEngineTool.opencode) != null;
+
+  @override
+  bool get canInstall => _installer.pins.isNotEmpty;
+
+  @override
+  Stream<CodeEngineProgress> install() => _installer.install();
+
+  @override
+  int get installBytes => _installer.totalBytes;
 
   @override
   Future<void> stop() async {

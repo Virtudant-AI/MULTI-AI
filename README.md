@@ -379,16 +379,37 @@ this app never shows opencode's own TUI. Two local processes back the tab:
   project folders never needs a restart — only `llama-server` restarts, and
   only when the selected model actually changes.
 
-Both binaries are **one-time manual PATH installs**, the same shape as the
-`coli` binary above — not auto-fetched:
+**Getting the two programs.** On Windows x64 the Code tab installs them for you:
+until both are found it shows an *Install* card (about 92 MB), which downloads
+pinned releases of each from GitHub into the app's own data folder
+(`<app data>\code_engine\`), verifies their SHA-256, and unpacks them. Nothing is
+added to `PATH` and no admin rights are needed; deleting that folder is a full
+uninstall (`code_engine_installer.dart`).
+
+- **Pinned, not latest.** opencode v1.18.29 and llama.cpp b11193 (Vulkan build —
+  32 MB and it runs on NVIDIA, AMD and Intel GPUs; a CUDA build is ~580 MB and is
+  future work). The opencode client speaks an undocumented API confirmed against
+  one release, so an unpinned download could break the tab with no change here.
+  Bump a pin deliberately and re-run `test/real_code_run_test.dart` with
+  `MULTI_AI_REAL_INSTALL=1`, which does a real install and a real end-to-end run.
+- **Antivirus.** These are unsigned executables, and Norton 360 was seen deleting
+  a freshly published llama.cpp build's `llama-server.exe` right after install,
+  while leaving the older, widely used b11193 alone — hence that pin. "Installed"
+  means the executable is still on disk, so a deleted install shows the Install
+  card again; if your antivirus keeps removing it, add an exclusion for the
+  `code_engine` folder or install the programs yourself.
+- **Already installed?** The app looks, in order, at its own install, `PATH`, and
+  the usual places the other install methods use (WinGet's package folder, npm's
+  global folder, `~/.opencode`) — so a WinGet/npm install works even when it
+  never made it onto `PATH` (`code_engine_locator.dart`).
+
+Linux and macOS (and Windows on ARM) install them by hand, the same shape as the
+`coli` binary above — the card says so instead of offering a download:
 
 - `llama-server`: [llama.cpp releases](https://github.com/ggml-org/llama.cpp/releases)
 - `opencode`: `curl -fsSL https://opencode.ai/install | bash`, or see
   [opencode.ai](https://opencode.ai) for other install methods (its own npm
   package, `opencode-ai`, works on Windows too)
-
-A missing binary surfaces as a clear in-tab error rather than a hang or a
-generic failure, the same as Colibri's "install `coli`" message.
 
 `app/lib/addons/code/llama_server_supervisor.dart` and
 `opencode_process_supervisor.dart` own these two processes (ping before

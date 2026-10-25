@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 1.1.2+7
+version: 1.1.3+8
 
 environment:
   sdk: ^3.12.2
@@ -49,6 +49,12 @@ dependencies:
   # machine needs a toolchain on PATH, which the release workflow installs.
   velopack_flutter: ^0.3.2
   url_launcher: ^6.3.2
+
+  # The Code tab's one-click engine install (`addons/code/code_engine_installer.dart`):
+  # sha256 of the downloaded llama.cpp / opencode zips, and unpacking them. Both were
+  # already resolved transitively; promoted now that lib/ imports them directly.
+  crypto: ^3.0.6
+  archive: ^4.0.9
 
   # Data directory resolution for chat history / settings / the on-device
   # model cache — dart:io's Platform.environment (the prior approach) is

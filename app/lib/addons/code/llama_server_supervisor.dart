@@ -4,6 +4,9 @@ import 'dart:io';
 
 import 'package:http/http.dart' as http;
 
+import 'code_engine_installer.dart' show CodeEngineTool;
+import 'code_engine_locator.dart';
+
 /// Owns the `llama-server` child process serving the Code tab's currently
 /// selected on-device GGUF model over an OpenAI-compatible API, so opencode
 /// (a separate process — see `opencode_process_supervisor.dart`) has
@@ -21,7 +24,11 @@ import 'package:http/http.dart' as http;
 /// Ports in use: see `searxng_supervisor.dart`'s header comment — this adds
 /// 8100.
 class LlamaServerSupervisor {
+  LlamaServerSupervisor({CodeEngineLocator? locator}) : _locator = locator ?? CodeEngineLocator();
+
   static const port = 8100;
+
+  final CodeEngineLocator _locator;
 
   Process? _process;
   String? _loadedModelPath;
@@ -41,33 +48,25 @@ class LlamaServerSupervisor {
     }
   }
 
-  static Future<bool> _onPath() async {
-    try {
-      final result =
-          await Process.run(Platform.isWindows ? 'where' : 'which', ['llama-server']);
-      return result.exitCode == 0;
-    } catch (_) {
-      return false;
-    }
-  }
-
   /// Starts `llama-server` for [ggufPath] and waits for it to answer. No-op
   /// if it's already serving that exact file. Loading a multi-gigabyte model
   /// can take a while, hence the generous default timeout — see
   /// `CodeEngine.ensureRunning` for the reuse-or-restart policy one layer up
   /// (a different [ggufPath] stops the old process first).
   ///
-  /// Throws [StateError] if the binary isn't on PATH, [Exception] if the
-  /// process exits during startup, and [TimeoutException] if it never
-  /// becomes healthy in time.
+  /// Throws [StateError] if the binary can't be found (see
+  /// [CodeEngineLocator]), [Exception] if the process exits during startup,
+  /// and [TimeoutException] if it never becomes healthy in time.
   Future<void> start(String ggufPath, {Duration timeout = const Duration(seconds: 90)}) async {
     if (_loadedModelPath == ggufPath && await ping()) return;
     await stop();
 
-    if (!await _onPath()) {
+    final executable = await _locator.find(CodeEngineTool.llamaServer);
+    if (executable == null) {
       throw StateError(
-        "llama-server isn't installed (or isn't on PATH) — install it once "
-        'from https://github.com/ggml-org/llama.cpp/releases, then try again.',
+        "llama-server wasn't found. Install the Code engine from the Code tab, "
+        'or install llama.cpp yourself (https://github.com/ggml-org/llama.cpp/releases) '
+        'and put llama-server on PATH.',
       );
     }
 
@@ -76,7 +75,7 @@ class LlamaServerSupervisor {
     // whole reason the Code tab no longer needs to prompt for a text tag
     // itself. See the README's "Code tab" section.
     _process = await Process.start(
-      'llama-server',
+      executable,
       ['-m', ggufPath, '--port', '$port', '--jinja'],
     );
     _loadedModelPath = ggufPath;

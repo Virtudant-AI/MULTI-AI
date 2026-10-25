@@ -70,8 +70,11 @@ if (Test-Path $embedPython) {
 
 Write-Host ""
 Write-Host "Optional" -ForegroundColor Cyan
-Test-Tool 'opencode' 'opencode' $false 'Code tab only. npm i -g opencode-ai  (or: curl -fsSL https://opencode.ai/install | bash)'
-Test-Tool 'llama-server' 'llama-server' $false 'Code tab only. Install llama.cpp and put llama-server on PATH (winget install ggml.llamacpp)'
+# WinGet and npm install these without putting them on PATH, so look where they land too
+# (the app does the same, and can install them itself from the Code tab).
+$wingetLlama = @(Get-ChildItem "$env:LOCALAPPDATA\Microsoft\WinGet\Packages" -Directory -Filter 'ggml.llamacpp*' -ErrorAction SilentlyContinue | ForEach-Object FullName)
+Test-Tool 'opencode' 'opencode' $false 'Code tab only. Use the Install button in the Code tab, or: npm i -g opencode-ai' @('--version') @("$env:APPDATA\npm\node_modules\opencode-ai\bin", "$env:USERPROFILE\.opencode\bin")
+Test-Tool 'llama-server' 'llama-server' $false 'Code tab only. Use the Install button in the Code tab, or: winget install ggml.llamacpp' @('--version') $wingetLlama
 Test-Tool 'coli' 'coli' $false 'Colibri component only'
 
 Write-Host ""

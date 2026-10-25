@@ -6,6 +6,8 @@ import 'package:http/http.dart' as http;
 
 import '../../api_client.dart' show apiBaseUrl;
 import '../../chat_store.dart' show appDataFile;
+import 'code_engine_installer.dart' show CodeEngineTool;
+import 'code_engine_locator.dart';
 import 'llama_server_supervisor.dart';
 
 /// Owns the single `opencode serve` child process the Code tab drives
@@ -24,6 +26,10 @@ import 'llama_server_supervisor.dart';
 /// Ports in use: see `searxng_supervisor.dart`'s header comment — this adds
 /// 8101.
 class OpencodeProcessSupervisor {
+  OpencodeProcessSupervisor({CodeEngineLocator? locator}) : _locator = locator ?? CodeEngineLocator();
+
+  final CodeEngineLocator _locator;
+
   static const port = 8101;
   static const baseUrl = 'http://127.0.0.1:$port';
 
@@ -41,6 +47,11 @@ class OpencodeProcessSupervisor {
 
   Process? _process;
 
+  /// Whether [_process] is a shell wrapping opencode rather than opencode
+  /// itself — true only for an npm `.cmd` shim on Windows. [stop] needs to know,
+  /// because ending the shell does not end what it started.
+  bool _startedThroughShell = false;
+
   /// The server model ids the running process's config registered. A server
   /// model outside this set can't be selected without rewriting the config,
   /// which opencode only reads at startup — see [start].
@@ -52,15 +63,6 @@ class OpencodeProcessSupervisor {
     try {
       final response = await http.get(Uri.parse('$baseUrl/config')).timeout(timeout);
       return response.statusCode == 200;
-    } catch (_) {
-      return false;
-    }
-  }
-
-  static Future<bool> _onPath() async {
-    try {
-      final result = await Process.run(Platform.isWindows ? 'where' : 'which', ['opencode']);
-      return result.exitCode == 0;
     } catch (_) {
       return false;
     }
@@ -132,27 +134,27 @@ class OpencodeProcessSupervisor {
     if (isRunning && !_registeredServerModels.containsAll(serverModelIds)) await stop();
     if (await ping()) return;
 
-    if (!await _onPath()) {
+    final executable = await _locator.find(CodeEngineTool.opencode);
+    if (executable == null) {
       throw StateError(
-        "opencode isn't installed (or isn't on PATH) — install it once "
-        '(curl -fsSL https://opencode.ai/install | bash, or see '
-        'https://opencode.ai), then try again.',
+        "opencode wasn't found. Install the Code engine from the Code tab, or "
+        'install opencode yourself (npm i -g opencode-ai, or see '
+        'https://opencode.ai) and make sure it is on PATH.',
       );
     }
 
     final configFile = await _writeConfig(serverModelIds);
     _registeredServerModels = serverModelIds;
 
+    // A `.cmd` shim (npm's) can't be launched by CreateProcess directly, so it
+    // goes through the shell; a real executable — the app's own install, or the
+    // one inside npm's package — never needs it.
+    _startedThroughShell = Platform.isWindows && !executable.toLowerCase().endsWith('.exe');
     _process = await Process.start(
-      'opencode',
+      executable,
       ['serve', '--port', '$port', '--hostname', '127.0.0.1'],
       environment: {'OPENCODE_CONFIG': configFile.path},
-      // On Windows, npm installs `opencode` as a `.cmd` shim (plus an
-      // extensionless shell script) rather than a `.exe`. `where` resolves
-      // that via PATHEXT (see `_onPath` above), but `Process.start` calls
-      // CreateProcess directly and skips PATHEXT resolution, so it can't
-      // find a bare `opencode` command without going through the shell.
-      runInShell: Platform.isWindows,
+      runInShell: _startedThroughShell,
     );
 
     final log = StringBuffer();
@@ -179,11 +181,10 @@ class OpencodeProcessSupervisor {
     final process = _process;
     _process = null;
     if (process == null) return;
-    if (Platform.isWindows) {
-      // `start` runs opencode through the shell on Windows, so `process` is
-      // that shell, not opencode itself: `kill()` ends the shell and leaves
-      // opencode running, still holding [port] — the next launch would adopt
-      // it. /T takes the whole tree down with it.
+    if (_startedThroughShell) {
+      // `process` is the shell around opencode, not opencode itself: `kill()`
+      // would end the shell and leave opencode running, still holding [port] —
+      // the next launch would adopt it. /T takes the whole tree down with it.
       await Process.run('taskkill', ['/T', '/F', '/PID', '${process.pid}']);
     } else {
       process.kill();

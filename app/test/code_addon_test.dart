@@ -8,6 +8,7 @@ import 'package:llamadart/llamadart.dart';
 import 'package:multi_ai/addons/code/code_agent_controller.dart';
 import 'package:multi_ai/addons/code/code_agent_pane.dart';
 import 'package:multi_ai/addons/code/code_engine.dart';
+import 'package:multi_ai/addons/code/code_engine_installer.dart' show CodeEngineProgress;
 import 'package:multi_ai/addons/code/code_session_store.dart';
 import 'package:multi_ai/addons/code/opencode_client.dart';
 import 'package:multi_ai/addons/code/project_root_source.dart';
@@ -110,6 +111,14 @@ class _FakeCodeEngine implements CodeEngine {
 
   @override
   Future<void> ensureRunning({required ModelInfo model}) async {}
+  @override
+  Future<bool> isInstalled() async => true;
+  @override
+  bool get canInstall => false;
+  @override
+  Stream<CodeEngineProgress> install() => const Stream.empty();
+  @override
+  int get installBytes => 0;
 
   @override
   Future<void> stop() async {}

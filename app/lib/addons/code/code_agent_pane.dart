@@ -95,6 +95,7 @@ class _CodeAgentPaneState extends State<CodeAgentPane> {
       builder: (context, _) {
         return Column(
           children: [
+            if (_c.engineReady == false) _buildEngineCard(),
             Expanded(
               child: _c.transcript.isEmpty ? _buildEmptyState() : _buildTranscript(),
             ),
@@ -102,6 +103,86 @@ class _CodeAgentPaneState extends State<CodeAgentPane> {
           ],
         );
       },
+    );
+  }
+
+  /// Shown while `llama-server` or `opencode` can't be found: the Code tab can't
+  /// do anything without them, so this is where the user fixes that, rather than
+  /// discovering it as a failed first message.
+  Widget _buildEngineCard() {
+    final installing = _c.engineInstalling;
+    final progress = _c.engineProgress;
+    final error = _c.engineInstallError;
+    final megabytes = (_c.engineInstallBytes / 1000000).round();
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 820),
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: cardColor,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.deepPurple.shade300.withValues(alpha: 0.5)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.download_for_offline_outlined,
+                        size: 18, color: Colors.deepPurple.shade200),
+                    const SizedBox(width: 8),
+                    const Text('The Code tab needs two programs',
+                        style: TextStyle(
+                            fontSize: 14, fontWeight: FontWeight.w600, color: Colors.white)),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  _c.engineCanInstall
+                      ? 'llama-server runs the model and opencode is the coding agent. '
+                          "They install into this app's own folder (about $megabytes MB) "
+                          '— nothing is added to your PATH or system.'
+                      : 'llama-server (from llama.cpp) runs the model and opencode is the '
+                          'coding agent. Install both yourself and put them on PATH — see the '
+                          'README "Code tab" section — then check again.',
+                  style: const TextStyle(fontSize: 12, height: 1.45, color: Colors.white70),
+                ),
+                if (installing) ...[
+                  const SizedBox(height: 12),
+                  LinearProgressIndicator(value: progress?.fraction),
+                  const SizedBox(height: 6),
+                  Text(progress?.message ?? 'Starting…',
+                      style: const TextStyle(fontSize: 11, color: Colors.white54)),
+                ] else ...[
+                  if (error != null) ...[
+                    const SizedBox(height: 10),
+                    Text(error, style: TextStyle(fontSize: 12, color: Colors.red.shade300)),
+                  ],
+                  const SizedBox(height: 12),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: _c.engineCanInstall
+                        ? FilledButton.icon(
+                            onPressed: _c.installEngine,
+                            icon: const Icon(Icons.download, size: 18),
+                            label: Text(error == null
+                                ? 'Install (~$megabytes MB)'
+                                : 'Try again'),
+                          )
+                        : OutlinedButton(
+                            onPressed: _c.refreshEngine,
+                            child: const Text('Check again'),
+                          ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -207,7 +288,9 @@ class _CodeAgentPaneState extends State<CodeAgentPane> {
               decoration: InputDecoration(
                 hintText: _c.canSend || running
                     ? 'Ask the Code assistant to do something'
-                    : 'Choose a project folder and a model first',
+                    : _c.engineReady == false
+                        ? 'Install the Code engine above first'
+                        : 'Choose a project folder and a model first',
                 hintStyle: const TextStyle(color: Colors.white38),
                 border: InputBorder.none,
               ),

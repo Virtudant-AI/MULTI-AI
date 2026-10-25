@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import '../../api_client.dart' show ModelInfo;
 import '../../model_pool.dart';
 import 'code_engine.dart';
+import 'code_engine_installer.dart' show CodeEngineProgress;
 import 'code_session_store.dart';
 import 'opencode_client.dart';
 import 'project_root_source.dart';
@@ -210,12 +211,68 @@ class CodeAgentController extends ChangeNotifier {
           (m.hasServerWeights && m.externalEndpoint == null))
       .toList();
 
-  bool get canSend => !_running && _projectRoot != null && _selectedModel != null;
+  bool get canSend =>
+      !_running && _projectRoot != null && _selectedModel != null && _engineReady != false;
+
+  // ----------------------------------------------------------- engine install
+
+  /// Whether `llama-server` and `opencode` are available: null until the first
+  /// check finishes (sending isn't blocked on that), then true or false. The
+  /// Code tab shows its install card while this is false.
+  bool? _engineReady;
+  bool? get engineReady => _engineReady;
+
+  /// Whether this platform can install them for the user at all.
+  bool get engineCanInstall => _engine.canInstall;
+  int get engineInstallBytes => _engine.installBytes;
+
+  bool _engineInstalling = false;
+  bool get engineInstalling => _engineInstalling;
+
+  CodeEngineProgress? _engineProgress;
+  CodeEngineProgress? get engineProgress => _engineProgress;
+
+  String? _engineInstallError;
+  String? get engineInstallError => _engineInstallError;
+
+  /// Re-checks whether the engine is installed. Called at start and after an
+  /// install; cheap enough to call again whenever the user might have installed
+  /// the programs themselves.
+  Future<void> refreshEngine() async {
+    final ready = await _engine.isInstalled();
+    if (ready == _engineReady) return;
+    _engineReady = ready;
+    notifyListeners();
+  }
+
+  /// Downloads and installs the engine, surfacing progress through
+  /// [engineProgress] and any failure through [engineInstallError].
+  Future<void> installEngine() async {
+    if (_engineInstalling) return;
+    _engineInstalling = true;
+    _engineInstallError = null;
+    _engineProgress = null;
+    notifyListeners();
+    try {
+      await for (final progress in _engine.install()) {
+        _engineProgress = progress;
+        notifyListeners();
+      }
+    } catch (e) {
+      _engineInstallError = e is StateError ? e.message : e.toString();
+    } finally {
+      _engineInstalling = false;
+      _engineProgress = null;
+      notifyListeners();
+    }
+    await refreshEngine();
+  }
 
   void start() {
     pool.addListener(_onPoolChanged);
     _onPoolChanged();
     unawaited(_loadStoredSessions());
+    unawaited(refreshEngine());
   }
 
   Future<void> _loadStoredSessions() async {

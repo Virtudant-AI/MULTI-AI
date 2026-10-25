@@ -91,6 +91,13 @@ Possible directions, none investigated yet:
     tool calls (see the README's "Which models actually call tools"). Fixed a
     Windows bug found on the way: `stop()` left `opencode.exe` running. Still
     unrun: the server-model path (needs torch + a CUDA build for the GPU).
+  - [x] Ship the Code tab working out of the box (Windows x64) — an Install card
+    downloads pinned, checksum-verified `llama-server` (b11193 Vulkan) and `opencode`
+    (v1.18.29) into the app's data folder; the app also finds WinGet/npm installs
+    that aren't on `PATH`. Verified with a real install + a real end-to-end run
+    (Gemma 4 E2B read a file through opencode using only the app-installed
+    binaries). Open: a CUDA build option, Linux/macOS (still manual), and
+    antivirus — Norton deleted a brand-new llama.cpp build's exe, see the README.
   - [x] Show each model's Code-tab verdict on its detail page — a model like
     Qwen2.5-Coder prints its call as text with no hint why, and Gemma 3 invents
     file contents. `app/lib/code_tool_support.dart` holds the per-model table
